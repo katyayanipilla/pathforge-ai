@@ -6,7 +6,7 @@ import random
 
 
 load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = Groq(api_key="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")
 
 MODEL = "llama-3.1-8b-instant"
 
