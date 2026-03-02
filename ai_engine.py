@@ -18,7 +18,9 @@ def ask_ai(prompt):
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
-    return completion.choices[0].message.get("content", "")
+    choice = completion.choices[0]
+    # Groq returns pydantic objects where `.message.content` is the text
+    return getattr(choice.message, "content", "")
 
 def generate_roadmap(goal, duration):
     return ask_ai(f"""
