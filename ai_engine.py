@@ -8,7 +8,7 @@ from datetime import datetime
 
 load_dotenv()
 api_key = st.secrets["GROQ_API_KEY"]
-client = GroqClient(api_key=api_key)
+client = Groq(api_key=api_key)
 
 MODEL = "llama-3.1-8b-instant"
 
