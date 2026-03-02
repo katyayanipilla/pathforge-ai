@@ -3,10 +3,11 @@ import os
 from dotenv import load_dotenv
 import json
 import random
-
+from datetime import datetime
 
 load_dotenv()
-client = Groq(api_key="GROQ_API_KEY")
+api_key = st.secrets["GROQ_API_KEY"]
+client = GroqClient(api_key=api_key)
 
 MODEL = "llama-3.1-8b-instant"
 
@@ -16,7 +17,7 @@ def ask_ai(prompt):
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
-    return completion.choices[0].message.content
+    return completion.choices[0].message.get("content", "")
 
 def generate_roadmap(goal, duration):
     return ask_ai(f"""
@@ -59,8 +60,10 @@ Rules:
 """
 
     response = ask_ai(prompt)
-    quiz_raw = json.loads(response)
-
+    try:
+        quiz_raw = json.loads(response)
+    except json.JSONDecodeError:
+        quiz_raw = []
     final_quiz = []
 
     for q in quiz_raw:
