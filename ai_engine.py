@@ -1,4 +1,4 @@
-from groq import GroqClient
+from groq import Groq
 import os
 from dotenv import load_dotenv
 import json
