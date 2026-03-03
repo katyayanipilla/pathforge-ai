@@ -1,129 +1,282 @@
-from groq import Groq
 import os
-from dotenv import load_dotenv
 import json
-import random
-import streamlit as st
-from datetime import datetime
+import re
+from dotenv import load_dotenv
+from groq import Groq
+
+# =====================================================
+# ENV SETUP
+# =====================================================
 
 load_dotenv()
-api_key = st.secrets["GROQ_API_KEY"]
-client = Groq(api_key=api_key)
+api_key = os.getenv("GROQ_API_KEY")
 
+if not api_key:
+    raise ValueError("GROQ_API_KEY missing in .env file")
+
+client = Groq(api_key=api_key)
 MODEL = "llama-3.1-8b-instant"
 
-def ask_ai(prompt):
-    completion = client.chat.completions.create(
+# =====================================================
+# SAFE JSON PARSER
+# =====================================================
+
+def safe_json_parse(text):
+    try:
+        cleaned = re.sub(r"```json|```", "", text).strip()
+        return json.loads(cleaned)
+    except:
+        return None
+
+
+def ask_ai(system_prompt, user_prompt, temperature=0.3, max_tokens=6000):
+    response = client.chat.completions.create(
         model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=temperature,
+        max_tokens=max_tokens
     )
-    choice = completion.choices[0]
-    # Groq returns pydantic objects where `.message.content` is the text
-    return getattr(choice.message, "content", "")
+    return response.choices[0].message.content.strip()
 
-def generate_roadmap(goal, duration):
-    return ask_ai(f"""
-Create a detailed learning roadmap.
+# =====================================================
+# ROADMAP ENGINE
+# =====================================================
 
-Goal: {goal}
-Duration: {duration}
+def generate_roadmap(role, duration_months, level):
 
-Include:
-- Weekly plan
-- Skills
-- Projects
-- Resources
-- Interview prep
-""")
-    
-def generate_daily_quiz(topic: str, num_questions: int = 25):
+    total_weeks = duration_months * 4
 
-    prompt = f"""
-Generate {num_questions} multiple choice questions about {topic}.
-
-Return ONLY JSON in this format:
-
-[
-  {{
-    "question": "Question text",
-    "correct_answer": "Correct answer",
-    "wrong_answers": [
-      "Wrong answer 1",
-      "Wrong answer 2",
-      "Wrong answer 3"
-    ]
-  }}
-]
-
-Rules:
-- Do NOT label A/B/C/D
-- Do NOT shuffle answers
-- Only JSON
+    system_prompt = """
+You are a world-class curriculum architect.
+Return strictly valid JSON.
+No explanations.
 """
 
-    response = ask_ai(prompt)
-    try:
-        quiz_raw = json.loads(response)
-    except json.JSONDecodeError:
-        quiz_raw = []
-    final_quiz = []
+    user_prompt = f"""
+Create a {total_weeks}-week structured roadmap for becoming a {role}.
+User Level: {level}
 
-    for q in quiz_raw:
-        options = [q["correct_answer"]] + q["wrong_answers"]
-        random.shuffle(options)
+Each week must include:
+- week_number
+- title
+- concepts (list)
+- learning_resources (list)
+- project
+- outcome
 
-        correct_letter = ["A", "B", "C", "D"][options.index(q["correct_answer"])]
+Return JSON list.
+"""
 
-        final_quiz.append({
-            "question": q["question"],
-            "options": {
-                "A": options[0],
-                "B": options[1],
-                "C": options[2],
-                "D": options[3]
-            },
-            "correct": correct_letter
-        })
+    response = ask_ai(system_prompt, user_prompt, 0.2)
+    return safe_json_parse(response) or []
 
-    return final_quiz
-    
-def generate_resume(details):
-    return ask_ai(f"""
-Create an ATS optimized professional resume:
+# =====================================================
+# ADAPTIVE QUIZ ENGINE (25 QUESTIONS)
+# =====================================================
+
+def generate_daily_quiz(topic, difficulty="Beginner", covered_subtopics=None):
+
+    if covered_subtopics is None:
+        covered_subtopics = []
+
+    system_prompt = """
+You are an elite technical exam creator.
+Return strictly valid JSON.
+"""
+
+    user_prompt = f"""
+Topic: {topic}
+Difficulty: {difficulty}
+Avoid subtopics already covered: {covered_subtopics}
+
+Generate 25 MCQs.
+
+Each must include:
+- question
+- options (4)
+- correct_answer
+- explanation
+- subtopic
+
+Return JSON list.
+"""
+
+    response = ask_ai(system_prompt, user_prompt, 0.4)
+    return safe_json_parse(response) or []
+
+# =====================================================
+# INTERVIEW ENGINE
+# =====================================================
+
+def generate_interview_question(role, round_type="technical"):
+
+    system_prompt = """
+You are a senior FAANG interviewer.
+Ask one realistic deep interview question.
+"""
+
+    user_prompt = f"""
+Role: {role}
+Round Type: {round_type}
+"""
+
+    return ask_ai(system_prompt, user_prompt)
+
+
+def evaluate_interview_answer(role, question, answer):
+
+    system_prompt = """
+You are evaluating a job candidate.
+Return strictly valid JSON.
+"""
+
+    user_prompt = f"""
+Role: {role}
+Question: {question}
+Candidate Answer: {answer}
+
+Return:
+{{
+  "technical_score": 0-10,
+  "communication_score": 0-10,
+  "confidence_score": 0-10,
+  "feedback": "",
+  "ideal_answer": "",
+  "improvement_suggestions": ""
+}}
+"""
+
+    response = ask_ai(system_prompt, user_prompt)
+    return safe_json_parse(response) or {}
+
+# =====================================================
+# SKILL GAP ANALYSIS
+# =====================================================
+
+def skill_gap_analysis(current_skills, target_role):
+
+    system_prompt = """
+You are a senior hiring manager.
+Return strictly valid JSON.
+"""
+
+    user_prompt = f"""
+Current Skills: {current_skills}
+Target Role: {target_role}
+
+Return:
+{{
+  "strengths": [],
+  "missing_skills": [],
+  "recommended_projects": [],
+  "certifications": [],
+  "interview_preparation": [],
+  "job_readiness_score": 0,
+  "final_advice": ""
+}}
+"""
+
+    response = ask_ai(system_prompt, user_prompt)
+    return safe_json_parse(response) or {}
+
+# =====================================================
+# ADVANCED RESUME BUILDER
+# =====================================================
+
+def generate_advanced_resume(details, target_role):
+
+    system_prompt = """
+You are a top-tier resume strategist.
+Create an ATS-optimized, executive-level resume.
+Quantify achievements.
+No placeholders.
+Professional formatting.
+"""
+
+    user_prompt = f"""
+Target Role: {target_role}
+User Details:
 {details}
-""")
+"""
 
-def generate_interview(role):
-    return ask_ai(f"""
-Generate technical and behavioral interview questions with answers for {role}.
-""")
+    return ask_ai(system_prompt, user_prompt, 0.4, 7000)
 
-def skill_gap(current_skills, target_role):
-    return ask_ai(f"""
-User current skills: {current_skills}
-Target role: {target_role}
+# =====================================================
+# EMOTIONAL INTELLIGENCE MENTOR
+# =====================================================
 
-Analyze skill gap and suggest missing skills in priority order.
-""")
 def mentor_chat(message):
-    return ask_ai(f"""
-You are a professional career mentor.
-Guide the student clearly and motivationally.
 
-Student Question: {message}
-""")
-def calculate_sincerity(created_at, last_updated, update_count, progress):
-    created = datetime.fromisoformat(created_at)
-    last = datetime.fromisoformat(last_updated)
+    system_prompt = """
+You are an emotionally intelligent career mentor.
+Motivate.
+Give clarity.
+Remove confusion.
+Provide step-by-step guidance.
+Reduce anxiety.
+Encourage discipline.
+"""
 
-    days_active = (last - created).days + 1
-    if days_active <= 0:
-        return 0
+    return ask_ai(system_prompt, message, 0.6)
 
-    consistency_score = min(update_count / days_active, 1) * 40
-    progress_score = (progress / 100) * 40
-    recency_score = 20 if (datetime.now() - last).days <= 2 else 0
+# =====================================================
+# CAREER PREDICTOR
+# =====================================================
 
-    sincerity_score = consistency_score + progress_score + recency_score
-    return round(sincerity_score, 1)
+def career_predictor(skills, interests):
+
+    system_prompt = """
+You are an AI career strategist.
+Return strictly valid JSON.
+"""
+
+    user_prompt = f"""
+Skills: {skills}
+Interests: {interests}
+
+Return:
+{{
+  "best_career_paths": [],
+  "reasoning": "",
+  "growth_potential": "",
+  "salary_projection": ""
+}}
+"""
+
+    response = ask_ai(system_prompt, user_prompt)
+    return safe_json_parse(response) or {}
+
+# =====================================================
+# SMART STUDY PLAN
+# =====================================================
+
+def generate_smart_study_plan(topic, mastery):
+
+    if mastery < 40:
+        return f"""
+📘 Foundation Plan for {topic}
+- Revise core fundamentals
+- Solve 50 beginner problems
+- Watch structured tutorials
+- Build 1 small project
+"""
+
+    elif mastery < 70:
+        return f"""
+⚡ Intermediate Plan for {topic}
+- Build 2 mini projects
+- Practice medium interview questions
+- Study real-world use cases
+"""
+
+    else:
+        return f"""
+🔥 Advanced Plan for {topic}
+- Build production-level project
+- Contribute to open source
+- Solve hard interview questions
+- Prepare system design basics
+"""
