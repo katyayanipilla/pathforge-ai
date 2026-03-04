@@ -23,24 +23,33 @@ MODEL = "llama-3.1-8b-instant"
 
 def safe_json_parse(text):
     try:
+        if not text:
+            return None
+
         # Remove markdown code blocks
         text = re.sub(r"```json|```", "", text).strip()
 
-        # Extract first JSON object using regex
-        match = re.search(r"\{.*\}", text, re.DOTALL)
+        # Find first JSON array OR object
+        match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", text)
 
-        if match:
-            json_str = match.group()
-            return json.loads(json_str)
+        if not match:
+            print("No JSON found in response")
+            print("RAW RESPONSE:", text)
+            return None
 
-        return None
+        json_str = match.group(0)
+
+        # Remove trailing commas (common AI mistake)
+        json_str = re.sub(r",\s*}", "}", json_str)
+        json_str = re.sub(r",\s*]", "]", json_str)
+
+        return json.loads(json_str)
 
     except Exception as e:
         print("JSON Parse Error:", e)
-        print("RAW TEXT:", text)
+        print("RAW RESPONSE:", text)
         return None
-
-
+    
 def ask_ai(system_prompt, user_prompt, temperature=0.3, max_tokens=6000):
     response = client.chat.completions.create(
         model=MODEL,
