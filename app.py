@@ -448,24 +448,34 @@ elif page == "📊Skill Gap":
 
         with st.spinner("Analyzing..."):
             result = skill_gap_analysis(skills, role)
-            save_skill_gap("st.session_state.username", role, result["job_readiness_score"])
+            st.write("DEBUG RESULT:", result)
+
+        if result and "job_readiness_score" in result:
+
+            save_skill_gap(
+                st.session_state.username,
+                role,
+                result["job_readiness_score"]
+            )
+
             st.session_state.job_readiness_score = result["job_readiness_score"]
 
-        if result:
             st.subheader("Strengths")
-            st.write(result["strengths"])
+            st.write(result.get("strengths", "N/A"))
 
             st.subheader("Missing Skills")
-            st.write(result["missing_skills"])
+            st.write(result.get("missing_skills", "N/A"))
 
             st.subheader("Recommended Projects")
-            st.write(result["recommended_projects"])
+            st.write(result.get("recommended_projects", "N/A"))
 
             st.subheader("Job Readiness Score")
             st.progress(result["job_readiness_score"] / 100)
 
-            st.write(result["final_advice"])
+            st.write(result.get("final_advice", ""))
 
+        else:
+            st.error("Skill gap analysis failed. Please try again.")
 # =====================================================
 # INTERVIEW
 # =====================================================

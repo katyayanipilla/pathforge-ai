@@ -23,9 +23,21 @@ MODEL = "llama-3.1-8b-instant"
 
 def safe_json_parse(text):
     try:
-        cleaned = re.sub(r"```json|```", "", text).strip()
-        return json.loads(cleaned)
-    except:
+        # Remove markdown code blocks
+        text = re.sub(r"```json|```", "", text).strip()
+
+        # Extract first JSON object using regex
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+
+        if match:
+            json_str = match.group()
+            return json.loads(json_str)
+
+        return None
+
+    except Exception as e:
+        print("JSON Parse Error:", e)
+        print("RAW TEXT:", text)
         return None
 
 
